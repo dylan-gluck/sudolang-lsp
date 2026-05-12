@@ -11,13 +11,9 @@ Built on [`tower-lsp`](https://crates.io/crates/tower-lsp) and
 |-----------------------------|--------|
 | `textDocument/publishDiagnostics` | ✅ syntax errors (unbalanced braces, missing tokens, malformed modifiers, broken `${}` interpolations) |
 | `textDocument/formatting`         | ✅ deterministic, structure-driven |
-| `textDocument/hover`              | — |
-| `textDocument/completion`         | — |
-| `textDocument/definition`         | — |
-
-Hover / completion / definition are planned; this v0.1 focuses on the two
-things every editor needs first: tell me when my code is broken, and keep
-it tidy on save.
+| `textDocument/hover`              | ✅ keyword blurbs + identifier / command signatures |
+| `textDocument/completion`         | ✅ keywords + every named declaration in the document |
+| `textDocument/definition`         | ✅ jumps to declaration in the current document |
 
 ## Diagnostics
 
@@ -27,6 +23,34 @@ The server walks the parsed tree and reports:
 - **Missing token** — any `MISSING` node (typically a `}` the parser inferred to recover).
 - **Malformed modifier** — a `modifier_list` containing parse errors. Modifiers look like `:length=short;format=json`.
 - **Broken interpolation** — a `string_interpolation` containing parse errors. Use `$identifier` or `${expression}`.
+
+## Hover
+
+Resolves the token under the cursor and returns a Markdown blurb:
+
+- **Keyword** (`fn`, `interface`, `require`, `warn`, `constraint`, …) —
+  short prose description from a static table.
+- **Identifier** that matches a named declaration in the document —
+  `kind name` header plus the first line of the declaration, rendered as
+  a `sudo` code block. Multiple matches are joined with a divider.
+- **Command name** (`/welcome`, `/help`, …) — the matching
+  `command_declaration`'s first line, or a generic `command` blurb when
+  the command isn't declared in-file.
+
+## Completion
+
+Returns a static list of SudoLang keywords plus every named declaration
+the document defines: functions, interfaces, properties, parameters,
+variables, constraint blocks, and commands. De-duplicated by
+`kind::name`. Trigger characters: `.`, `/`, `$`. The client filters by
+prefix.
+
+## Definition
+
+Jumps from an identifier or `/command` invocation to its declaration in
+the same document. Cross-file resolution is not implemented — SudoLang
+has no module system to anchor it on. Clicking on the declaration itself
+returns no destinations (avoids self-target).
 
 ## Formatter
 
@@ -53,7 +77,7 @@ the block ranges we'd re-indent against would be unreliable.
 ## Install
 
 ```sh
-cargo install --git https://github.com/dylan-gluck/sudolang-lsp --tag v0.1.0
+cargo install --git https://github.com/dylan-gluck/sudolang-lsp --tag v0.2.0
 ```
 
 Or from a local checkout:

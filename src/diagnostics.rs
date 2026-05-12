@@ -128,6 +128,36 @@ pub fn node_range(node: Node, source: &str) -> Range {
     }
 }
 
+/// Convert an LSP `Position` (line + UTF-16 column) into a byte offset.
+/// Returns `None` if the position is past end-of-document. Inverse of
+/// [`byte_to_position`].
+pub fn position_to_byte(source: &str, pos: Position) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut line = 0u32;
+    let mut byte = 0usize;
+
+    while line < pos.line {
+        let b = *bytes.get(byte)?;
+        byte += 1;
+        if b == b'\n' {
+            line += 1;
+        }
+    }
+
+    let mut utf16 = 0u32;
+    let line_end = source[byte..]
+        .find('\n')
+        .map(|n| byte + n)
+        .unwrap_or(source.len());
+    let mut i = byte;
+    while utf16 < pos.character && i < line_end {
+        let ch = source[i..].chars().next()?;
+        utf16 += ch.len_utf16() as u32;
+        i += ch.len_utf8();
+    }
+    Some(i)
+}
+
 /// Convert a byte offset into an LSP `Position` (line + UTF-16 column).
 pub fn byte_to_position(byte: usize, source: &str) -> Position {
     let byte = byte.min(source.len());

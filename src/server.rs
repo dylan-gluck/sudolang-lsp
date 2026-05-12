@@ -3,9 +3,12 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
+use crate::completion;
+use crate::definition;
 use crate::diagnostics;
 use crate::document::Document;
 use crate::formatter;
+use crate::hover;
 
 pub struct Backend {
     client: Client,
@@ -46,6 +49,17 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::FULL,
                 )),
                 document_formatting_provider: Some(OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: Some(vec![
+                        ".".into(),
+                        "/".into(),
+                        "$".into(),
+                    ]),
+                    ..CompletionOptions::default()
+                }),
+                definition_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -127,6 +141,43 @@ impl LanguageServer for Backend {
             new_text: formatted,
         };
         Ok(Some(vec![edit]))
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let Some(doc) = self.documents.get(&uri) else {
+            return Ok(None);
+        };
+        Ok(hover::hover(&doc.tree, &doc.text, position))
+    }
+
+    async fn completion(
+        &self,
+        params: CompletionParams,
+    ) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let Some(doc) = self.documents.get(&uri) else {
+            return Ok(None);
+        };
+        let items = completion::complete(&doc.tree, &doc.text);
+        Ok(Some(CompletionResponse::Array(items)))
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let Some(doc) = self.documents.get(&uri) else {
+            return Ok(None);
+        };
+        let locs = definition::definitions(&doc.tree, &doc.text, &uri, position);
+        if locs.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(GotoDefinitionResponse::Array(locs)))
     }
 }
 
