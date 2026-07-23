@@ -49,6 +49,77 @@ fn node_has_error(node: Node) -> bool {
     node.has_error()
 }
 
+/// 2.2 §3.6 — `_` is the pipe placeholder: inside a pipe stage it means
+/// "the piped value"; anywhere else it has no subject. The grammar
+/// accepts it everywhere (it lexes as a plain identifier); the LSP owns
+/// the misuse diagnostic. Declaration positions (parameters, patterns)
+/// are exempt — `_` is the conventional discard there.
+pub fn placeholder_misuse(tree: &Tree, source: &str) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let mut cursor = tree.walk();
+    visit_placeholders(&mut cursor, source, &mut out);
+    out
+}
+
+fn visit_placeholders(cursor: &mut TreeCursor, source: &str, out: &mut Vec<Diagnostic>) {
+    let node = cursor.node();
+    if node.kind() == "identifier"
+        && node_text(node, source) == "_"
+        && !in_pipe_stage(node)
+        && !in_declaration_position(node)
+    {
+        out.push(Diagnostic {
+            range: node_range(node, source),
+            severity: Some(DiagnosticSeverity::WARNING),
+            source: Some("sudolang-lsp".into()),
+            message: "`_` is the pipe placeholder — outside a pipe stage it has no \
+                      subject. Use it in `value |> stage(_.field)` positions."
+                .into(),
+            ..Default::default()
+        });
+    }
+    if cursor.goto_first_child() {
+        loop {
+            visit_placeholders(cursor, source, out);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+        cursor.goto_parent();
+    }
+}
+
+/// True when some ancestor edge passes through the right-hand side of a
+/// `pipe_expression` — i.e. the node is inside a pipe stage.
+fn in_pipe_stage(node: Node) -> bool {
+    let mut child = node;
+    while let Some(parent) = child.parent() {
+        if parent.kind() == "pipe_expression" {
+            if let Some(right) = parent.child_by_field_name("right") {
+                if right.start_byte() <= child.start_byte()
+                    && child.end_byte() <= right.end_byte()
+                {
+                    return true;
+                }
+            }
+        }
+        child = parent;
+    }
+    false
+}
+
+fn in_declaration_position(node: Node) -> bool {
+    let mut current = node;
+    while let Some(parent) = current.parent() {
+        match parent.kind() {
+            "parameter" | "array_pattern" | "object_pattern" | "rest_pattern" => return true,
+            _ => {}
+        }
+        current = parent;
+    }
+    false
+}
+
 fn missing_diagnostic(node: Node, source: &str) -> Diagnostic {
     let kind = node.kind();
     let message = if kind.is_empty() {

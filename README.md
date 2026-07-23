@@ -9,11 +9,27 @@ Built on [`tower-lsp`](https://crates.io/crates/tower-lsp) and
 
 | Capability                  | Status |
 |-----------------------------|--------|
-| `textDocument/publishDiagnostics` | ✅ syntax errors (unbalanced braces, missing tokens, malformed modifiers, broken `${}` interpolations) |
-| `textDocument/formatting`         | ✅ deterministic, structure-driven |
-| `textDocument/hover`              | ✅ keyword blurbs + identifier / command signatures |
-| `textDocument/completion`         | ✅ keywords + every named declaration in the document |
-| `textDocument/definition`         | ✅ jumps to declaration in the current document |
+| `textDocument/publishDiagnostics` | ✅ syntax errors (unbalanced braces, missing tokens, malformed modifiers, broken `${}` interpolations) + 2.2 placeholder-misuse lint |
+| `textDocument/formatting`         | ✅ deterministic, structure-driven; formats `sudo` fences in markdown in place |
+| `textDocument/hover`              | ✅ keyword / decorator / capability blurbs + identifier / command signatures |
+| `textDocument/completion`         | ✅ keywords, every named declaration, capability namespaces (`mcp::linear`) |
+| `textDocument/definition`         | ✅ jumps to declaration, across all fences of a markdown document |
+
+Targets **SudoLang v2.2** (grammar 0.3.0): qualified capability names
+(`::`), named arguments, guard statements (`->`), decorators, optional
+chaining `?.`, nullish default `??`, spread `...`, pipe placeholder `_`.
+
+## Markdown documents
+
+The preferred SudoLang authoring format is **markdown with `sudo` code
+fences** — plain `.md`, or `.sudo.md` to signal SudoLang content. The
+server treats each ```` ```sudo ```` fence as a virtual document: fences
+are diagnosed, formatted, hovered, and navigated independently, with all
+positions mapped back to the host file, while the fences of one document
+share a single symbol table (a function declared in one fence resolves
+from another). Prose is never touched; broken fences are skipped by the
+formatter; ```` ```sudo-next ```` fences (proposal syntax) are ignored.
+Pure `.sudo` files behave as before.
 
 ## Diagnostics
 
@@ -76,13 +92,21 @@ the block ranges we'd re-indent against would be unreliable.
 
 ## Install
 
+From crates.io:
+
 ```sh
-cargo install --git https://github.com/dylan-gluck/sudolang-lsp --tag v0.2.0
+cargo install sudolang-lsp
 ```
 
-Or from a local checkout:
+Prebuilt binaries for macOS (arm64/x64), Linux (x64/arm64), and Windows
+(x64) ship with each [GitHub Release](https://github.com/dylan-gluck/sudolang-lsp/releases) —
+download, unpack, and put `sudolang-lsp` on your `$PATH`.
+
+Or from a local checkout (needs `tree-sitter-sudolang` checked out as a
+sibling directory — the grammar is a path dependency):
 
 ```sh
+git clone https://github.com/dylan-gluck/tree-sitter-sudolang
 git clone https://github.com/dylan-gluck/sudolang-lsp
 cd sudolang-lsp
 cargo install --path .

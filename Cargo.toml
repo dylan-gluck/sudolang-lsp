@@ -1,6 +1,6 @@
 [package]
 name = "sudolang-lsp"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 description = "Structural language server for SudoLang (diagnostics + deterministic formatter)"
@@ -9,6 +9,9 @@ authors = ["Dylan Navajas Gluck"]
 readme = "README.md"
 keywords = ["sudolang", "lsp", "tree-sitter", "language-server"]
 categories = ["development-tools"]
+# examples/format_canonical.rs include_str!s the sibling grammar checkout;
+# keep it out of the published crate.
+exclude = ["examples/"]
 
 [[bin]]
 name = "sudolang-lsp"
@@ -24,7 +27,10 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tree-sitter = "0.25"
-tree-sitter-sudolang = { git = "https://github.com/dylan-gluck/tree-sitter-sudolang", tag = "v0.1.1" }
+# Local path for development (workspace sibling; CI checks the grammar out
+# alongside). `cargo publish` strips the path and resolves the crates.io
+# version — publish the grammar crate first.
+tree-sitter-sudolang = { path = "../tree-sitter-sudolang", version = "0.3.0" }
 dashmap = "5"
 ropey = "1"
 

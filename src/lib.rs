@@ -10,6 +10,7 @@ pub mod diagnostics;
 pub mod document;
 pub mod formatter;
 pub mod hover;
+pub mod markdown;
 pub mod server;
 pub mod symbols;
 

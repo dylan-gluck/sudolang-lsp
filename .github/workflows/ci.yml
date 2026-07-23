@@ -1,0 +1,32 @@
+name: CI
+
+# The grammar is a path dependency (../tree-sitter-sudolang), so CI checks
+# both repos out as siblings — the same layout as the workspace.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sudolang-lsp
+      - uses: actions/checkout@v4
+        with:
+          repository: dylan-gluck/tree-sitter-sudolang
+          path: tree-sitter-sudolang
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sudolang-lsp
+      - run: cargo test
+        working-directory: sudolang-lsp
+      - run: cargo run --release --example format_canonical
+        working-directory: sudolang-lsp

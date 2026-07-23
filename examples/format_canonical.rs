@@ -13,6 +13,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("ai-rpg", include_str!("../../tree-sitter-sudolang/examples/ai-rpg.sudo")),
     ("sudolang", include_str!("../../tree-sitter-sudolang/examples/sudolang.sudo")),
     ("vector-search", include_str!("../../tree-sitter-sudolang/examples/vector-search.sudo")),
+    ("issue-to-pr", include_str!("../../tree-sitter-sudolang/examples/issue-to-pr.sudo")),
 ];
 
 fn main() {

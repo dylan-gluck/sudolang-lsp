@@ -1,0 +1,105 @@
+name: Release
+
+# Tag-driven release: pushing v* runs the test gate, verifies the tag
+# matches Cargo.toml, publishes to crates.io, and uploads prebuilt
+# binaries for five targets to a GitHub Release.
+#
+# Order matters across packages: tree-sitter-sudolang must already be on
+# crates.io at the version this crate's dependency requires — `cargo
+# publish` strips the path dependency and resolves it from the registry.
+#
+# Required repo secret: CARGO_REGISTRY_TOKEN.
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sudolang-lsp
+      - uses: actions/checkout@v4
+        with:
+          repository: dylan-gluck/tree-sitter-sudolang
+          path: tree-sitter-sudolang
+      - run: cargo test
+        working-directory: sudolang-lsp
+
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          echo "tag=$tag cargo=$cargo"
+          [ "$tag" = "$cargo" ]
+
+  publish-crate:
+    needs: [test, version-check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sudolang-lsp
+      - uses: actions/checkout@v4
+        with:
+          repository: dylan-gluck/tree-sitter-sudolang
+          path: tree-sitter-sudolang
+      - run: cargo publish
+        working-directory: sudolang-lsp
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  binaries:
+    needs: [test, version-check]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sudolang-lsp
+      - uses: actions/checkout@v4
+        with:
+          repository: dylan-gluck/tree-sitter-sudolang
+          path: tree-sitter-sudolang
+      - run: cargo build --release --locked
+        working-directory: sudolang-lsp
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: >
+          tar -C sudolang-lsp/target/release -czf
+          sudolang-lsp-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          sudolang-lsp
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: >
+          Compress-Archive -Path sudolang-lsp/target/release/sudolang-lsp.exe
+          -DestinationPath sudolang-lsp-${{ github.ref_name }}-${{ matrix.target }}.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: sudolang-lsp-*
+          generate_release_notes: true

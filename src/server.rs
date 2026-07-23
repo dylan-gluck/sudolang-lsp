@@ -3,12 +3,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use crate::completion;
-use crate::definition;
-use crate::diagnostics;
-use crate::document::Document;
-use crate::formatter;
-use crate::hover;
+use crate::document::{Document, FormatResult};
 
 pub struct Backend {
     client: Client,
@@ -27,7 +22,7 @@ impl Backend {
         let Some(doc) = self.documents.get(&uri) else {
             return;
         };
-        let diags = diagnostics::collect(&doc.tree, &doc.text);
+        let diags = doc.diagnostics();
         let version = Some(doc.version);
         drop(doc);
         self.client
@@ -56,6 +51,8 @@ impl LanguageServer for Backend {
                         ".".into(),
                         "/".into(),
                         "$".into(),
+                        ":".into(),
+                        "@".into(),
                     ]),
                     ..CompletionOptions::default()
                 }),
@@ -79,7 +76,7 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri.clone();
         let text = params.text_document.text;
         let version = params.text_document.version;
-        if let Some(doc) = Document::new(text, version) {
+        if let Some(doc) = Document::for_path(uri.path(), text, version) {
             self.documents.insert(uri.clone(), doc);
             self.refresh_diagnostics(uri).await;
         }
@@ -96,7 +93,7 @@ impl LanguageServer for Backend {
 
         if let Some(mut doc) = self.documents.get_mut(&uri) {
             doc.update(text, version);
-        } else if let Some(doc) = Document::new(text, version) {
+        } else if let Some(doc) = Document::for_path(uri.path(), text, version) {
             self.documents.insert(uri.clone(), doc);
         }
         self.refresh_diagnostics(uri).await;
@@ -117,30 +114,29 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        if formatter::tree_has_errors(&doc.tree) {
-            self.client
-                .log_message(
-                    MessageType::INFO,
-                    "sudolang-lsp: refusing to format — document has parse errors",
-                )
-                .await;
-            return Ok(None);
+        match doc.format() {
+            FormatResult::Refused => {
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        "sudolang-lsp: refusing to format — document has parse errors",
+                    )
+                    .await;
+                Ok(None)
+            }
+            FormatResult::Unchanged => Ok(Some(vec![])),
+            FormatResult::Formatted(formatted) => {
+                let end = end_of_document_position(&doc.text);
+                let edit = TextEdit {
+                    range: Range {
+                        start: Position::new(0, 0),
+                        end,
+                    },
+                    new_text: formatted,
+                };
+                Ok(Some(vec![edit]))
+            }
         }
-
-        let formatted = formatter::format(&doc.text, &doc.tree);
-        if formatted == doc.text {
-            return Ok(Some(vec![]));
-        }
-
-        let end = end_of_document_position(&doc.text);
-        let edit = TextEdit {
-            range: Range {
-                start: Position::new(0, 0),
-                end,
-            },
-            new_text: formatted,
-        };
-        Ok(Some(vec![edit]))
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -149,7 +145,7 @@ impl LanguageServer for Backend {
         let Some(doc) = self.documents.get(&uri) else {
             return Ok(None);
         };
-        Ok(hover::hover(&doc.tree, &doc.text, position))
+        Ok(doc.hover(position))
     }
 
     async fn completion(
@@ -157,10 +153,13 @@ impl LanguageServer for Backend {
         params: CompletionParams,
     ) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
         let Some(doc) = self.documents.get(&uri) else {
             return Ok(None);
         };
-        let items = completion::complete(&doc.tree, &doc.text);
+        let Some(items) = doc.completions(position) else {
+            return Ok(None);
+        };
         Ok(Some(CompletionResponse::Array(items)))
     }
 
@@ -173,7 +172,7 @@ impl LanguageServer for Backend {
         let Some(doc) = self.documents.get(&uri) else {
             return Ok(None);
         };
-        let locs = definition::definitions(&doc.tree, &doc.text, &uri, position);
+        let locs = doc.definitions(&uri, position);
         if locs.is_empty() {
             return Ok(None);
         }

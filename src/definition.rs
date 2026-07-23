@@ -10,35 +10,50 @@ use tree_sitter::{Node, Tree};
 use crate::diagnostics::position_to_byte;
 use crate::symbols::{self, Symbol};
 
-pub fn definitions(tree: &Tree, source: &str, uri: &Url, position: Position) -> Vec<Location> {
-    let Some(byte) = position_to_byte(source, position) else {
-        return Vec::new();
-    };
-    let Some(node) = identifier_or_command_at(tree, byte) else {
-        return Vec::new();
-    };
+/// The symbol reference under the cursor: what to look up, and where the
+/// cursor's own node sits (so callers can exclude it from results).
+pub struct Target {
+    pub name: String,
+    pub is_command: bool,
+    pub range: tower_lsp::lsp_types::Range,
+}
+
+pub fn target_at(tree: &Tree, source: &str, position: Position) -> Option<Target> {
+    let byte = position_to_byte(source, position)?;
+    let node = identifier_or_command_at(tree, byte)?;
     let name = node_text(node, source);
     if name.is_empty() {
-        return Vec::new();
+        return None;
     }
+    Some(Target {
+        name: name.to_string(),
+        is_command: node.kind() == "command_name",
+        range: crate::diagnostics::node_range(node, source),
+    })
+}
 
-    let syms = symbols::collect(tree, source);
-    let is_command = node.kind() == "command_name";
+pub fn symbol_matches(sym: &Symbol, target: &Target) -> bool {
+    if sym.name != target.name {
+        return false;
+    }
+    if target.is_command {
+        matches!(sym.kind, crate::symbols::SymbolKind::Command)
+    } else {
+        !matches!(sym.kind, crate::symbols::SymbolKind::Command)
+    }
+}
 
-    syms.into_iter()
-        .filter(|s| {
-            if s.name != name {
-                return false;
-            }
-            if is_command {
-                matches!(s.kind, crate::symbols::SymbolKind::Command)
-            } else {
-                !matches!(s.kind, crate::symbols::SymbolKind::Command)
-            }
-        })
+pub fn definitions(tree: &Tree, source: &str, uri: &Url, position: Position) -> Vec<Location> {
+    let Some(target) = target_at(tree, source, position) else {
+        return Vec::new();
+    };
+
+    symbols::collect(tree, source)
+        .into_iter()
+        .filter(|s| symbol_matches(s, &target))
         // Don't return the user's own cursor position as the destination —
         // that's just where they clicked.
-        .filter(|s| !is_same_range(s, node, source))
+        .filter(|s| s.name_range != target.range)
         .map(|s: Symbol| Location {
             uri: uri.clone(),
             range: s.name_range,
@@ -61,11 +76,6 @@ fn identifier_or_command_at(tree: &Tree, byte: usize) -> Option<Node<'_>> {
     } else {
         None
     }
-}
-
-fn is_same_range(sym: &Symbol, node: Node, source: &str) -> bool {
-    let node_r = crate::diagnostics::node_range(node, source);
-    sym.name_range == node_r
 }
 
 fn node_text<'a>(node: Node, source: &'a str) -> &'a str {
