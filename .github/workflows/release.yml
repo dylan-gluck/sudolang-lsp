@@ -54,7 +54,14 @@ jobs:
         with:
           repository: dylan-gluck/tree-sitter-sudolang
           path: tree-sitter-sudolang
-      - run: cargo publish
+      - name: Publish (skipped if this version is already on crates.io)
+        run: |
+          v=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          if curl -sf https://index.crates.io/su/do/sudolang-lsp | grep -q "\"vers\":\"$v\""; then
+            echo "sudolang-lsp $v already on crates.io — skipping"
+            exit 0
+          fi
+          cargo publish
         working-directory: sudolang-lsp
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
