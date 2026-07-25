@@ -55,11 +55,11 @@ Resolves the token under the cursor and returns a Markdown blurb:
 
 ## Completion
 
-Returns a static list of SudoLang keywords plus every named declaration
-the document defines: functions, interfaces, properties, parameters,
-variables, constraint blocks, and commands. De-duplicated by
-`kind::name`. Trigger characters: `.`, `/`, `$`. The client filters by
-prefix.
+Returns a static list of SudoLang keywords, every named declaration
+the document defines (functions, interfaces, properties, parameters,
+variables, constraint blocks, commands), and every capability namespace
+it references (`mcp::linear`). De-duplicated by `kind::name`. Trigger
+characters: `.`, `/`, `$`, `:`, `@`. The client filters by prefix.
 
 ## Definition
 
@@ -87,8 +87,9 @@ What it leaves alone:
 - everything inside `block_comment`, `triple_quoted_block`, `double_string`, `template_string`
 - operator spacing, brace placement, comma placement on existing lines
 
-If the document contains parse errors, the server declines to format —
-the block ranges we'd re-indent against would be unreliable.
+If a pure `.sudo` document contains parse errors, the server declines to
+format — the block ranges we'd re-indent against would be unreliable. In
+markdown, clean fences still format; only the broken ones are skipped.
 
 ## Install
 
