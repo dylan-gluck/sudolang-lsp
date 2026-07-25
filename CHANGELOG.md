@@ -5,6 +5,12 @@ All notable changes to `sudolang-lsp` are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-24
+
+Lockstep release with tree-sitter-sudolang 0.3.1 (a packaging fix for
+the grammar's Node binding). No functional changes to the server; the
+grammar dependency moves to 0.3.1.
+
 ## [0.3.0] - 2026-07-23
 
 Targets **SudoLang v2.2** via tree-sitter-sudolang 0.3.0. Version aligned
