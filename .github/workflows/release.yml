@@ -8,7 +8,9 @@ name: Release
 # crates.io at the version this crate's dependency requires — `cargo
 # publish` strips the path dependency and resolves it from the registry.
 #
-# Required repo secret: CARGO_REGISTRY_TOKEN.
+# Publishing uses OIDC trusted publishing (no token secrets): configure
+# this repo + release.yml as a trusted publisher on crates.io for the
+# sudolang-lsp crate.
 
 on:
   push:
@@ -46,6 +48,9 @@ jobs:
   publish-crate:
     needs: [test, version-check]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,17 +59,25 @@ jobs:
         with:
           repository: dylan-gluck/tree-sitter-sudolang
           path: tree-sitter-sudolang
-      - name: Publish (skipped if this version is already on crates.io)
+      - name: Skip if this version is already on crates.io
+        id: check
         run: |
           v=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           if curl -sf https://index.crates.io/su/do/sudolang-lsp | grep -q "\"vers\":\"$v\""; then
-            echo "sudolang-lsp $v already on crates.io — skipping"
-            exit 0
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "sudolang-lsp $v already on crates.io — skipping publish"
           fi
-          cargo publish
+        working-directory: sudolang-lsp
+      # OIDC trusted publishing — configured on crates.io (Settings →
+      # Trusted Publishing), no long-lived token secret.
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        if: steps.check.outputs.published != 'true'
+      - run: cargo publish
+        if: steps.check.outputs.published != 'true'
         working-directory: sudolang-lsp
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
   binaries:
     needs: [test, version-check]
