@@ -1,6 +1,6 @@
 # sudolang-lsp
 
-A structural language server for [SudoLang](https://github.com/paralleldrive/sudolang-llm-support).
+A structural language server for SudoLang, the pseudolanguage for instructing LLMs.
 
 Built on [`tower-lsp`](https://crates.io/crates/tower-lsp) and
 [`tree-sitter-sudolang`](https://github.com/dylan-gluck/tree-sitter-sudolang).
