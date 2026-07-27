@@ -7,7 +7,9 @@
 //! multi-line string or comment.
 //!
 //! What this normalizes:
-//!   - leading whitespace on each line → `INDENT_WIDTH * block_depth` spaces
+//!   - leading whitespace on each line → `INDENT_WIDTH * indent_depth`
+//!     spaces, where the depth counts the distinct rows on which the
+//!     enclosing indent-bearing constructs opened (see [`INDENT_KINDS`])
 //!   - trailing whitespace on each line → removed
 //!   - runs of 2+ blank lines → a single blank line
 //!   - missing trailing newline → added (if file is non-empty)
@@ -38,6 +40,25 @@ const PRESERVED_KINDS: &[&str] = &[
     "triple_quoted_block",
     "double_string",
     "template_string",
+];
+
+/// Node kinds that add one indent level to the lines strictly inside them.
+///
+/// `block` is the obvious one. The rest are the multi-line constructs that
+/// carry their own delimiters and would otherwise flatten to the depth of
+/// the statement that opens them: literals and patterns (`{ }` / `[ ]`),
+/// call and signature lists (`( )`), the braces of a `match` (which are not
+/// a `block` node), and a pipe chain broken across lines.
+const INDENT_KINDS: &[&str] = &[
+    "block",
+    "object_literal",
+    "array_literal",
+    "object_pattern",
+    "array_pattern",
+    "argument_list",
+    "parameter_list",
+    "match_expression",
+    "pipe_expression",
 ];
 
 pub fn format(source: &str, tree: &Tree) -> String {
@@ -74,7 +95,7 @@ pub fn format(source: &str, tree: &Tree) -> String {
         consecutive_blank = 0;
 
         let first_non_ws = first_non_ws.unwrap();
-        let depth = line_indent_depth(tree, bytes, first_non_ws);
+        let depth = line_indent_depth(tree, bytes, first_non_ws, line_end);
         let content = source[first_non_ws..line_end].trim_end_matches([' ', '\t']);
 
         for _ in 0..depth * INDENT_WIDTH {
@@ -127,23 +148,72 @@ fn line_is_preserved(line_start: usize, preserved: &[(usize, usize)]) -> bool {
         .any(|&(s, e)| line_start > s && line_start < e)
 }
 
-fn line_indent_depth(tree: &Tree, source_bytes: &[u8], first_non_ws: usize) -> usize {
-    let mut depth = 0usize;
-    let ch = source_bytes.get(first_non_ws).copied();
+/// Indent depth for the line whose first non-whitespace byte is
+/// `first_non_ws`.
+///
+/// We walk the ancestor chain and collect the *rows on which each
+/// enclosing construct opened*, then count the distinct rows. Counting
+/// rows rather than nodes is what keeps stacked openers honest: in
+///
+/// ```text
+/// describe("unit", () => {
+///   assert()
+/// })
+/// ```
+///
+/// the `argument_list` and the `block` both open on row 0, so `assert()`
+/// gets one indent level, not two. A construct that opens on its own row
+/// still contributes its own level.
+///
+/// A node is skipped when the line *is* its opening delimiter or its
+/// closing delimiter, so `{` and `}` sit at the depth of their parent.
+/// Closers stack the same way openers do — on a `})` line both the block
+/// and the argument list are closing, so both are skipped.
+fn line_indent_depth(
+    tree: &Tree,
+    source_bytes: &[u8],
+    first_non_ws: usize,
+    line_end: usize,
+) -> usize {
+    let mut opener_rows: Vec<usize> = Vec::new();
     let mut node = tree
         .root_node()
         .descendant_for_byte_range(first_non_ws, first_non_ws);
     while let Some(n) = node {
-        if n.kind() == "block" {
-            let opens_here = ch == Some(b'{') && n.start_byte() == first_non_ws;
-            let closes_here = ch == Some(b'}') && n.end_byte() == first_non_ws + 1;
-            if !opens_here && !closes_here {
-                depth += 1;
+        if INDENT_KINDS.contains(&n.kind()) && spans_multiple_lines(n) {
+            if !opens_line(n, first_non_ws) && !closes_line(n, source_bytes, first_non_ws, line_end)
+            {
+                opener_rows.push(n.start_position().row);
             }
         }
         node = n.parent();
     }
-    depth
+    opener_rows.sort_unstable();
+    opener_rows.dedup();
+    opener_rows.len()
+}
+
+/// The line begins with this node's opening delimiter.
+fn opens_line(node: Node, first_non_ws: usize) -> bool {
+    node.start_byte() == first_non_ws
+}
+
+/// This line is the node's closing delimiter: the node ends on this line,
+/// and everything from the first non-whitespace byte through that closing
+/// delimiter is itself a closer or separator. That admits `}`, `})`, `},`
+/// and `}]` while rejecting a continuation line that merely happens to
+/// contain the node's last byte — `|> score |> takeTop(3)` ends a pipe
+/// expression but is not a closing delimiter line.
+fn closes_line(node: Node, source: &[u8], first_non_ws: usize, line_end: usize) -> bool {
+    let Some(close) = node.end_byte().checked_sub(1) else {
+        return false;
+    };
+    if close < first_non_ws || close >= line_end {
+        return false;
+    }
+    source[first_non_ws..=close]
+        .iter()
+        .all(|b| matches!(b, b'}' | b']' | b')' | b',' | b';' | b' ' | b'\t'))
 }
 
 fn collect_preserved_ranges(tree: &Tree) -> Vec<(usize, usize)> {

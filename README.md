@@ -55,7 +55,7 @@ The formatter is conservative and deterministic. It walks the parse tree to find
 
 The formatter normalizes:
 
-- leading whitespace to `2 × block_depth` spaces, computed from the AST
+- leading whitespace to two spaces per indent level, computed from the AST. A block, an object or array literal, a destructuring pattern, an argument or parameter list, the braces of a `match`, and a multi-line pipe chain each add one level. Constructs that open on the same line share one level, so `describe("unit", () => {` indents its body once.
 - trailing whitespace, which it removes
 - a run of two or more blank lines, which becomes one blank line
 - a missing terminal newline, which it adds

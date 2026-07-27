@@ -102,3 +102,103 @@ fn close_brace_dedents() {
     let expected = "Foo {\n  x\n}\n";
     assert_eq!(fmt(input), expected);
 }
+
+// --- Indent-bearing constructs beyond `block` -------------------------
+//
+// Each of these used to flatten to the depth of the statement that opened
+// it, because only `block` counted toward indent depth.
+
+#[test]
+fn multiline_object_literal_indents_its_entries() {
+    let input = "files = {\ndux: infer(),\nstore: infer(),\n}\n";
+    let expected = "files = {\n  dux: infer(),\n  store: infer(),\n}\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn multiline_array_literal_indents_its_entries() {
+    let input = "characters = [\n\"Vega\",\n\"Juno\",\n]\n";
+    let expected = "characters = [\n  \"Vega\",\n  \"Juno\",\n]\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn match_arms_indent_inside_the_match_braces() {
+    // `match { ... }` braces are not a `block` node, so the arms used to
+    // land at column 0.
+    let input = "r = match (v) {\ncase 1 => \"one\",\ndefault => \"other\",\n}\n";
+    let expected = "r = match (v) {\n  case 1 => \"one\",\n  default => \"other\",\n}\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn pipe_continuation_lines_indent_one_level() {
+    let input = "options = pick(7)\n|> score\n|> takeTop(3)\n";
+    let expected = "options = pick(7)\n  |> score\n  |> takeTop(3)\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn multiline_argument_list_indents_its_arguments() {
+    let input = "createDraft(\nbase = \"development\",\ntitle,\n)\n";
+    let expected = "createDraft(\n  base = \"development\",\n  title,\n)\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn multiline_pattern_indents_like_its_literal() {
+    let input = "{\nname,\nage,\n} = user\n";
+    let expected = "{\n  name,\n  age,\n} = user\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn stacked_openers_on_one_line_give_one_indent_level() {
+    // The `argument_list` and the arrow function's `block` both open on
+    // row 0. Counting nodes would double-indent `assert()`; counting
+    // distinct opener rows gives it a single level.
+    let input = "describe(\"unit\", () => {\nassert()\n})\n";
+    let expected = "describe(\"unit\", () => {\n  assert()\n})\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn nesting_composes_across_construct_kinds() {
+    let input = "Dux {\nfiles = {\ndux: infer(),\n}\n}\n";
+    let expected = "Dux {\n  files = {\n    dux: infer(),\n  }\n}\n";
+    assert_eq!(fmt(input), expected);
+}
+
+#[test]
+fn single_line_literals_add_no_depth() {
+    let input = "Foo {\n  config = { a: 1, b: [2, 3] }\n}\n";
+    assert_eq!(fmt(input), input);
+}
+
+#[test]
+fn canonical_examples_are_already_canonically_formatted() {
+    // The strongest contract: the formatter agrees with hand-written
+    // idiomatic SudoLang. If this fails, either an example drifted or the
+    // indent rule regressed.
+    let examples = [
+        ("riteway", include_str!("../../tree-sitter-sudolang/examples/riteway.sudo")),
+        ("autodux", include_str!("../../tree-sitter-sudolang/examples/autodux.sudo")),
+        ("ai-rpg", include_str!("../../tree-sitter-sudolang/examples/ai-rpg.sudo")),
+        ("sudolang", include_str!("../../tree-sitter-sudolang/examples/sudolang.sudo")),
+        ("vector-search", include_str!("../../tree-sitter-sudolang/examples/vector-search.sudo")),
+        ("issue-to-pr", include_str!("../../tree-sitter-sudolang/examples/issue-to-pr.sudo")),
+    ];
+    for (name, src) in examples {
+        let formatted = fmt(src);
+        if formatted != src {
+            let diff: Vec<String> = src
+                .lines()
+                .zip(formatted.lines())
+                .enumerate()
+                .filter(|(_, (a, b))| a != b)
+                .map(|(i, (a, b))| format!("  {}: -{a:?}\n     +{b:?}", i + 1))
+                .collect();
+            panic!("{name} is not canonically formatted:\n{}", diff.join("\n"));
+        }
+    }
+}

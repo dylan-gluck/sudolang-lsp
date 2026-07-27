@@ -32,5 +32,11 @@ fn main() {
             "{name:<14} parse_errors={errors:<5} lines={lines_in}→{lines_out} \
              changed_lines={changed_lines} bytes_delta={bytes_diff:+}"
         );
+        for (i, (a, b)) in src.lines().zip(formatted.lines()).enumerate() {
+            if a != b {
+                println!("    {:>4} -{a}", i + 1);
+                println!("         +{b}");
+            }
+        }
     }
 }

@@ -13,9 +13,18 @@ Lockstep release with tree-sitter-sudolang 0.3.2.
 
 - **Decorator completion.** The server declared `@` as a completion trigger character, and it offered no decorators. It now returns the documented 2.2 vocabulary: `@agent`, `@retry`, `@timeout`, `@parallel`, `@memo`, and `@blocking`. Each item carries the same blurb that hover shows. An unknown decorator stays legal.
 
+### Fixed
+
+- **The formatter no longer flattens multi-line constructs.** Indent depth counted `block` ancestors only, so format-on-save destroyed the shape of a multi-line object literal, array literal, destructuring pattern, argument list, and pipe chain. It pushed `match` arms to column 0, because the braces of a `match` are not a `block` node.
+
+  Indent depth now counts the distinct rows on which the enclosing indent-bearing constructs opened. Counting rows rather than nodes collapses stacked openers, so `describe("unit", () => {` indents its body one level and not two. A line made of closing delimiters dedents, and `}`, `})`, and `},` all work. A pipe continuation is not a closing line and keeps its level.
+
+  All six canonical examples now format to themselves. `formatter_test` asserts that, so an indent regression fails the suite.
+
 ### Changed
 
 - README rewritten in ASD-STE100 Simplified Technical English.
+- `examples/format_canonical` prints the changed lines, not only a count.
 
 ## [0.3.1] - 2026-07-24
 
