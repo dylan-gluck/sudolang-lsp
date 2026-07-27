@@ -1,6 +1,6 @@
 [package]
 name = "sudolang-lsp"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "Structural language server for SudoLang (diagnostics + deterministic formatter)"
@@ -30,7 +30,7 @@ tree-sitter = "0.25"
 # Local path for development (workspace sibling; CI checks the grammar out
 # alongside). `cargo publish` strips the path and resolves the crates.io
 # version — publish the grammar crate first.
-tree-sitter-sudolang = { path = "../tree-sitter-sudolang", version = "0.3.1" }
+tree-sitter-sudolang = { path = "../tree-sitter-sudolang", version = "0.3.2" }
 dashmap = "5"
 ropey = "1"
 

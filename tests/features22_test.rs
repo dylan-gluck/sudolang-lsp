@@ -105,6 +105,20 @@ fn qualified_paths_offered_as_completions() {
 }
 
 #[test]
+fn decorator_vocabulary_offered_as_completions() {
+    let tree = parse(SHOWCASE);
+    let items = completion::complete(&tree, SHOWCASE);
+    for name in ["@agent", "@retry", "@timeout", "@parallel", "@memo", "@blocking"] {
+        assert!(
+            items
+                .iter()
+                .any(|i| i.label == name && i.detail.as_deref() == Some("decorator")),
+            "missing {name} decorator item"
+        );
+    }
+}
+
+#[test]
 fn guard_and_named_argument_have_no_false_diagnostics() {
     let tree = parse(SHOWCASE);
     let diags = diagnostics::collect(&tree, SHOWCASE);

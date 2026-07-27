@@ -1,7 +1,7 @@
 //! Completion provider.
 //!
-//! Returns a static list of SudoLang keywords plus every named
-//! declaration the [`symbols`] module finds in the current document.
+//! Returns a static list of SudoLang keywords and decorators, plus every
+//! named declaration the [`symbols`] module finds in the current document.
 //! No fuzzy ranking and no context-sensitivity yet — Zed (and most LSP
 //! clients) will filter by prefix on their side.
 //!
@@ -39,6 +39,17 @@ const KEYWORDS: &[&str] = &[
     "constraint",
 ];
 
+/// The 2.2 decorator vocabulary (§3.4). Unknown decorators stay legal, so
+/// this list is a starting point and not a closed set.
+const DECORATORS: &[(&str, &str)] = &[
+    ("@agent", "Run the decorated unit as the named subagent. `@agent(general)`"),
+    ("@retry", "Retry the decorated unit on failure. `@retry(3)`"),
+    ("@timeout", "Abort the decorated unit after the given duration. `@timeout(120)`"),
+    ("@parallel", "Run iterations (or the decorated unit) concurrently."),
+    ("@memo", "Memoize — repeated calls with the same inputs reuse the previous result."),
+    ("@blocking", "Requires interaction before continuing. `@blocking(user)`"),
+];
+
 pub fn complete(tree: &Tree, source: &str) -> Vec<CompletionItem> {
     complete_many(std::iter::once((tree, source)))
 }
@@ -48,7 +59,7 @@ pub fn complete(tree: &Tree, source: &str) -> Vec<CompletionItem> {
 pub fn complete_many<'a>(
     blocks: impl IntoIterator<Item = (&'a Tree, &'a str)>,
 ) -> Vec<CompletionItem> {
-    let mut items = Vec::with_capacity(KEYWORDS.len() + 16);
+    let mut items = Vec::with_capacity(KEYWORDS.len() + DECORATORS.len() + 16);
     let mut seen: HashSet<String> = HashSet::new();
 
     for kw in KEYWORDS {
@@ -58,6 +69,22 @@ pub fn complete_many<'a>(
             ..Default::default()
         });
         seen.insert((*kw).into());
+    }
+
+    // Decorators (2.2) — `@` is a trigger character, so typing it offers
+    // the documented vocabulary. Unknown decorators remain legal.
+    for (name, blurb) in DECORATORS {
+        items.push(CompletionItem {
+            label: (*name).into(),
+            kind: Some(CompletionItemKind::KEYWORD),
+            detail: Some("decorator".into()),
+            documentation: Some(Documentation::MarkupContent(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: (*blurb).into(),
+            })),
+            ..Default::default()
+        });
+        seen.insert((*name).into());
     }
 
     for (tree, source) in blocks {
