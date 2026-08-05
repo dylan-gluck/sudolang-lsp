@@ -606,7 +606,7 @@ checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 
 [[package]]
 name = "sudolang-lsp"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "dashmap",
  "pretty_assertions",
@@ -799,7 +799,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-sudolang"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "cc",
  "tree-sitter-language",

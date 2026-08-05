@@ -5,6 +5,26 @@ All notable changes to `sudolang-lsp` are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-08-05
+
+Lockstep release with tree-sitter-sudolang 0.3.3.
+
+### Added
+
+- **A one-shot `check` command.** `sudolang-lsp check <file>...` prints the diagnostics that the server publishes, and it needs no editor, no workspace checkout, and no build step. The installed binary is the only dependency, so an agent or a CI job can call it from any directory.
+
+  It reads a pure `.sudo` file whole, and it reads a markdown host one sudo fence at a time, so every line number it prints is a host line. Output is one finding per line, as `<path>:<line>:<column>: <message>`. A message is collapsed to one line, because an error preview is a raw source snippet that can hold newlines. The exit code is 0 for clean, 1 for findings, and 2 for a usage error or a file that cannot be read.
+
+  The binary with no arguments still serves the LSP over stdio, which is what an editor does. `--help` and `--version` are also available.
+
+- **A one-shot `fmt` command.** `sudolang-lsp fmt <file>` runs the same deterministic re-indent that the editor runs on save, and it prints the result to stdout. `--check` reports which files would change and exits 1 if any would, which suits a CI job or a pre-commit hook. `--write` rewrites each file in place.
+
+  In a markdown host it formats each clean sudo fence and never touches the prose. It declines a file that does not parse, because parse errors make the block ranges unreliable: it says so, and it exits 2. All seven canonical examples report as already formatted.
+
+### Fixed
+
+- **A `.mdc` file is a markdown host.** The server read it as pure SudoLang, so every prose line became a syntax error. `scripts/validate.sh` and the skill documentation always treated `.mdc` as a host. The server now agrees.
+
 ## [0.3.2] - 2026-07-27
 
 Lockstep release with tree-sitter-sudolang 0.3.2.

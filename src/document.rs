@@ -42,6 +42,7 @@ pub struct Document {
 }
 
 /// Outcome of a whole-document format request.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FormatResult {
     /// Parse errors make block ranges unreliable — decline.
     Refused,

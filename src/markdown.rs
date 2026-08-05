@@ -23,7 +23,10 @@ pub struct Fence {
 
 pub fn is_markdown_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
-    lower.ends_with(".md") || lower.ends_with(".markdown")
+    // `.mdc` hosts fences too — Cursor rule files. `scripts/validate.sh`
+    // and the skill docs have always claimed it; the server used to
+    // read it as pure SudoLang and diagnose every prose line.
+    lower.ends_with(".md") || lower.ends_with(".markdown") || lower.ends_with(".mdc")
 }
 
 pub fn extract_fences(text: &str) -> Vec<Fence> {

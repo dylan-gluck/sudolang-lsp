@@ -14,11 +14,13 @@ The server builds on [`tower-lsp`](https://crates.io/crates/tower-lsp) and [`tre
 | `textDocument/completion`         | ✅ keywords, 2.2 decorators, every named declaration, capability namespaces (`mcp::linear`) |
 | `textDocument/definition`         | ✅ jumps to a declaration, across all fences of a markdown document |
 
-The server targets **SudoLang v2.2** with grammar 0.3.2. Version 2.2 covers qualified capability names (`::`), named arguments, and guard statements (`->`). It also covers decorators, optional chaining `?.`, nullish default `??`, spread `...`, and the pipe placeholder `_`.
+The binary also runs as a one-shot checker — see [Command line](#command-line).
+
+The server targets **SudoLang v2.2** with grammar 0.3.3. Version 2.2 covers qualified capability names (`::`), named arguments, and guard statements (`->`). It also covers decorators, optional chaining `?.`, nullish default `??`, spread `...`, and the pipe placeholder `_`.
 
 ## Markdown documents
 
-Write SudoLang in markdown with `sudo` code fences. Use a plain `.md` file, or use `.sudo.md` to mark the file as SudoLang content.
+Write SudoLang in markdown with `sudo` code fences. Use a plain `.md`, `.sudo.md`, or `.mdc` file. Use `.sudo.md` to mark the file as SudoLang content.
 
 The server treats each ```` ```sudo ```` fence as a virtual document. It diagnoses, formats, hovers, and navigates each fence on its own, and maps every position back to the host file. All fences in one document share one symbol table, so a function declared in one fence resolves from another.
 
@@ -66,6 +68,34 @@ The formatter leaves alone:
 - operator spacing, brace placement, and comma placement on existing lines
 
 If a pure `.sudo` document contains parse errors, the server refuses to format it, because the block ranges to re-indent against are unreliable. In markdown, clean fences still format and the server skips only the broken ones.
+
+## Command line
+
+The binary has two modes. With no arguments it serves the LSP over stdio, which is what an editor does. With `check` it reports the same diagnostics once and exits, which is what an agent, a pre-commit hook, or a CI job does:
+
+```sh
+sudolang-lsp check program.sudo notes.sudo.md
+```
+
+```
+ok: program.sudo
+notes.sudo.md:31:14: `_` is the pipe placeholder — outside a pipe stage it has no subject.
+-- 1 finding in 2 files
+```
+
+It accepts `.sudo`, `.md`, `.sudo.md`, and `.mdc`. A markdown host is checked one fence at a time, and every line number is a host line, so the output points at the file you edit. Each finding is one line, as `<path>:<line>:<column>: <message>`.
+
+The exit code is 0 for clean, 1 for findings, and 2 for a usage error or a file that cannot be read. `check` needs no editor, no workspace checkout, and no build step.
+
+`fmt` runs the formatter the same way:
+
+```sh
+sudolang-lsp fmt program.sudo          # print the formatted text to stdout
+sudolang-lsp fmt --check src/*.sudo    # report what would change; exit 1 if any
+sudolang-lsp fmt --write src/*.sudo    # rewrite each file in place
+```
+
+Because stdout carries the file, a plain `fmt` takes one file. Use `--write` for a set. In a markdown host, `fmt` formats each clean sudo fence and leaves the prose alone. It declines a file that does not parse, and it tells you to run `check` first.
 
 ## Install
 
